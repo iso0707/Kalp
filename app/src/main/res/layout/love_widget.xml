@@ -1,14 +1,25 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent" android:layout_height="match_parent"
-    android:orientation="vertical" android:gravity="center"
-    android:padding="12dp" android:background="@drawable/widget_bg">
-    <TextView android:id="@+id/heart" android:layout_width="wrap_content"
-        android:layout_height="wrap_content" android:text="♥" android:textColor="#F28DB5"
-        android:textSize="20sp"/>
-    <TextView android:id="@+id/distance" android:layout_width="wrap_content"
-        android:layout_height="wrap_content" android:text="Konumlar bekleniyor"
-        android:textColor="#FFFFFF" android:textStyle="bold" android:textSize="15sp"/>
-    <TextView android:id="@+id/time" android:layout_width="wrap_content"
-        android:layout_height="wrap_content" android:text="Birlikte: tarih ayarla"
-        android:textColor="#D5D9E5" android:textSize="11sp"/>
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="8dp"
+    android:background="@drawable/widget_bg">
+
+    <TextView
+        android:id="@+id/widget_time"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="17:16"
+        android:textColor="#FFFFFF"
+        android:textSize="25sp"
+        android:textStyle="bold"/>
+
+    <TextView
+        android:id="@+id/widget_distance"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="♥ Kalpler bağlı"
+        android:textColor="#FF8FAF"
+        android:textSize="12sp"/>
 </LinearLayout>
