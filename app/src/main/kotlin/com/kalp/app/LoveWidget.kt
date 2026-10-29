@@ -3,7 +3,6 @@ package com.kalp.app
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
-import android.content.Intent
 import android.widget.RemoteViews
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -32,38 +31,51 @@ class LoveWidget : AppWidgetProvider() {
                 R.layout.love_widget
             )
 
-            val time = SimpleDateFormat(
-                "HH:mm",
-                Locale.getDefault()
-            ).format(Date())
-
             val prefs = context.getSharedPreferences(
                 "kalp_data",
                 Context.MODE_PRIVATE
             )
 
-            val code = prefs.getString("pair_code", null)
+            val start = prefs.getString("relationship_start", null)
 
-            views.setTextViewText(R.id.widget_time, time)
+            if (start != null) {
+                try {
+                    val date = SimpleDateFormat(
+                        "yyyy-MM-dd",
+                        Locale.US
+                    ).parse(start.take(10))!!
+
+                    val elapsed = (System.currentTimeMillis() - date.time)
+                        .coerceAtLeast(0L)
+
+                    val days = elapsed / 86400000L
+                    val hours = elapsed / 3600000L
+
+                    views.setTextViewText(
+                        R.id.widget_time,
+                        "$days gün  •  $hours saat"
+                    )
+                } catch (_: Exception) {
+                    views.setTextViewText(
+                        R.id.widget_time,
+                        "Tarih bekleniyor"
+                    )
+                }
+            } else {
+                views.setTextViewText(
+                    R.id.widget_time,
+                    "Tarih seçilmedi"
+                )
+            }
+
+            val distance = prefs.getString("distance", null)
+
             views.setTextViewText(
                 R.id.widget_distance,
-                if (code == null) "♥ Eşleşmeni bekliyor" else "♥ Kalpler bağlı"
+                if (distance != null) "♥ $distance km" else "♥ Konum bekleniyor"
             )
 
             manager.updateAppWidget(id, views)
-        }
-    }
-
-    override fun onReceive(context: Context, intent: Intent) {
-        super.onReceive(context, intent)
-
-        if (intent.action == Intent.ACTION_TIME_TICK ||
-            intent.action == Intent.ACTION_TIME_CHANGED) {
-            val manager = AppWidgetManager.getInstance(context)
-            val ids = manager.getAppWidgetIds(
-                android.content.ComponentName(context, LoveWidget::class.java)
-            )
-            onUpdate(context, manager, ids)
         }
     }
 }
