@@ -1,3 +1,4 @@
+
 package com.kalp.app
 
 import android.app.Activity
@@ -25,6 +26,7 @@ class MainActivity : Activity() {
 
     private lateinit var root: LinearLayout
     private lateinit var info: TextView
+    private lateinit var pairCodeInfo: TextView
     private lateinit var username: EditText
     private lateinit var password: EditText
     private lateinit var selectedDate: TextView
@@ -38,6 +40,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         window.statusBarColor = dark
         window.navigationBarColor = dark
 
@@ -74,7 +77,10 @@ class MainActivity : Activity() {
         return v
     }
 
-    private fun addInput(hintText: String, secret: Boolean = false): EditText {
+    private fun addInput(
+        hintText: String,
+        secret: Boolean = false
+    ): EditText {
         val v = EditText(this).apply {
             hint = hintText
             setTextColor(Color.WHITE)
@@ -95,6 +101,7 @@ class MainActivity : Activity() {
 
     private fun showLogin() {
         makeRoot()
+
         addText("♥ Kalp", 36f).setTextColor(pink)
         addText("Mesafeler uzak olsa da kalpler yakın.", 14f)
 
@@ -102,8 +109,13 @@ class MainActivity : Activity() {
         password = addInput("Şifre", true)
         info = addText("", 14f)
 
-        addButton("Giriş Yap") { authenticate(false) }
-        addButton("Hesap Oluştur") { authenticate(true) }
+        addButton("Giriş Yap") {
+            authenticate(false)
+        }
+
+        addButton("Hesap Oluştur") {
+            authenticate(true)
+        }
     }
 
     private fun authenticate(register: Boolean) {
@@ -124,20 +136,20 @@ class MainActivity : Activity() {
 
         thread {
             try {
-                val s = if (register) {
+                val session = if (register) {
                     SupabaseStore.register(user, pass)
                 } else {
                     SupabaseStore.login(user, pass)
                 }
 
                 prefs.edit()
-                    .putString("uid", s.uid)
-                    .putString("token", s.token)
+                    .putString("uid", session.uid)
+                    .putString("token", session.token)
                     .apply()
 
                 runOnUiThread {
-                    currentSession = s
-                    showHome(s)
+                    currentSession = session
+                    showHome(session)
                 }
 
             } catch (e: Exception) {
@@ -156,7 +168,18 @@ class MainActivity : Activity() {
 
         info = addText("Henüz eşleşmediniz.", 17f)
 
+        pairCodeInfo = addText("", 18f)
+        pairCodeInfo.setTextColor(pink)
+
+        val savedCode = prefs.getString("pair_code", null)
+
+        if (savedCode != null) {
+            pairCodeInfo.text =
+                "♥ Eşleşme kodun: $savedCode\nPartnerine gönder."
+        }
+
         val pairId = prefs.getString("pair_id", null)
+
         if (pairId != null) {
             loadPairInfo(session, pairId)
         }
@@ -186,11 +209,16 @@ class MainActivity : Activity() {
             ).format(relationshipDate.time)
 
             val code = (100000..999999).random().toString()
+
             info.text = "Eşleşme oluşturuluyor..."
 
             thread {
                 try {
-                    val id = SupabaseStore.createPair(session, code, date)
+                    val id = SupabaseStore.createPair(
+                        session,
+                        code,
+                        date
+                    )
 
                     prefs.edit()
                         .putString("pair_id", id)
@@ -199,9 +227,13 @@ class MainActivity : Activity() {
                         .apply()
 
                     runOnUiThread {
-                        info.text = "♥ Eşleşme kodun: $code\nPartnerine gönder."
+                        pairCodeInfo.text =
+                            "♥ Eşleşme kodun: $code\nPartnerine gönder."
+
+                        info.text = "Eşleşme başarıyla oluşturuldu!"
                         loadPairInfo(session, id)
                     }
+
                 } catch (e: Exception) {
                     runOnUiThread {
                         info.text = "Hata: ${e.message}"
@@ -223,12 +255,18 @@ class MainActivity : Activity() {
             thread {
                 try {
                     val id = SupabaseStore.joinPair(session, code)
-                    prefs.edit().putString("pair_id", id).apply()
+
+                    prefs.edit()
+                        .putString("pair_id", id)
+                        .remove("pair_code")
+                        .apply()
 
                     runOnUiThread {
-                        info.text = "♥ Başarıyla eşleştiniz!"
+                        pairCodeInfo.text = "♥ Başarıyla eşleştiniz!"
+                        info.text = "Eşleşme tamamlandı."
                         loadPairInfo(session, id)
                     }
+
                 } catch (e: Exception) {
                     runOnUiThread {
                         info.text = "Hata: ${e.message}"
@@ -249,12 +287,17 @@ class MainActivity : Activity() {
 
         addButton("Konum paylaşımını kapat") {
             stopService(Intent(this, LocationService::class.java))
-            prefs.edit().putBoolean("sharing_enabled", false).apply()
+
+            prefs.edit()
+                .putBoolean("sharing_enabled", false)
+                .apply()
+
             info.text = "Konum paylaşımı kapatıldı."
         }
 
         addButton("Mesafeyi yenile") {
             val id = prefs.getString("pair_id", null)
+
             if (id != null) {
                 loadDistance(session, id)
             } else {
@@ -264,12 +307,20 @@ class MainActivity : Activity() {
 
         addButton("Bilgileri yenile") {
             val id = prefs.getString("pair_id", null)
-            if (id != null) loadPairInfo(session, id)
+
+            if (id != null) {
+                loadPairInfo(session, id)
+            }
         }
 
         addButton("Çıkış yap") {
             stopService(Intent(this, LocationService::class.java))
-            prefs.edit().remove("uid").remove("token").apply()
+
+            prefs.edit()
+                .remove("uid")
+                .remove("token")
+                .apply()
+
             currentSession = null
             showLogin()
         }
@@ -277,8 +328,10 @@ class MainActivity : Activity() {
 
     private fun updateDateText() {
         selectedDate.text = "Seçilen tarih: " +
-            SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
-                .format(relationshipDate.time)
+            SimpleDateFormat(
+                "dd.MM.yyyy",
+                Locale.getDefault()
+            ).format(relationshipDate.time)
     }
 
     private fun requestLocationPermission() {
@@ -312,7 +365,11 @@ class MainActivity : Activity() {
         permissions: Array<out String>,
         grantResults: IntArray
     ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        super.onRequestPermissionsResult(
+            requestCode,
+            permissions,
+            grantResults
+        )
 
         if (requestCode == locationRequest) {
             val locationGranted =
@@ -328,7 +385,8 @@ class MainActivity : Activity() {
             if (locationGranted) {
                 startLocationSharing()
             } else {
-                info.text = "Konum izni verilmedi. Paylaşım açılmadı."
+                info.text =
+                    "Konum izni verilmedi. Paylaşım açılmadı."
             }
         }
     }
@@ -343,8 +401,12 @@ class MainActivity : Activity() {
                 startService(intent)
             }
 
-            prefs.edit().putBoolean("sharing_enabled", true).apply()
+            prefs.edit()
+                .putBoolean("sharing_enabled", true)
+                .apply()
+
             info.text = "♥ Konum paylaşımı açıldı."
+
         } catch (e: Exception) {
             info.text = "Konum başlatılamadı: ${e.message}"
         }
@@ -364,8 +426,9 @@ class MainActivity : Activity() {
                     Locale.US
                 ).parse(start.substring(0, 10)) ?: Date()
 
-                val elapsed = (System.currentTimeMillis() - date.time)
-                    .coerceAtLeast(0L)
+                val elapsed = (
+                    System.currentTimeMillis() - date.time
+                ).coerceAtLeast(0L)
 
                 val days = elapsed / 86400000L
                 val hours = elapsed / 3600000L
@@ -377,7 +440,9 @@ class MainActivity : Activity() {
                     .apply()
 
                 runOnUiThread {
-                    info.text = "♥ Eşleşme aktif\n\n$days gündür birliktesiniz\n$hours saat"
+                    info.text =
+                        "♥ Eşleşme aktif\n\n$days gündür birliktesiniz\n$hours saat"
+
                     loadDistance(session, pairId)
                 }
 
@@ -395,11 +460,13 @@ class MainActivity : Activity() {
     ) {
         thread {
             try {
-                val locations = SupabaseStore.getLocations(session, pairId)
+                val locations =
+                    SupabaseStore.getLocations(session, pairId)
 
                 if (locations.length() < 2) {
                     runOnUiThread {
-                        info.text = "♥ Eşleşme aktif\nİki tarafın da konum paylaşması bekleniyor."
+                        info.text =
+                            "♥ Eşleşme aktif\nİki tarafın da konum paylaşması bekleniyor."
                     }
                     return@thread
                 }
@@ -418,7 +485,8 @@ class MainActivity : Activity() {
                 )
 
                 val km = results[0] / 1000.0
-                val distanceText = String.format(Locale.US, "%.1f", km)
+                val distanceText =
+                    String.format(Locale.US, "%.1f", km)
 
                 prefs.edit()
                     .putString("distance", distanceText)
