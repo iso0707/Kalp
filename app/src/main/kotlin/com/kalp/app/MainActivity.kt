@@ -22,35 +22,64 @@ class MainActivity : Activity() {
         getSharedPreferences("kalp_data", Context.MODE_PRIVATE)
     }
 
+    private val dark = Color.rgb(12, 14, 25)
+    private val pink = Color.rgb(255, 130, 170)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        window.statusBarColor = dark
+        window.navigationBarColor = dark
+        window.decorView.setBackgroundColor(dark)
+
+        showLoading()
 
         val uid = prefs.getString("uid", null)
         val token = prefs.getString("token", null)
 
-        if (uid != null && token != null) {
+        if (!uid.isNullOrBlank() && !token.isNullOrBlank()) {
             session = SupabaseStore.Session(uid, token)
             buildUi()
         } else {
-            info = TextView(this)
-            info.text = "Kalp hazırlanıyor..."
-            info.setTextColor(Color.WHITE)
-            setContentView(info)
-            thread {
-                try {
-                    val newSession = SupabaseStore.anonymousSignIn()
-                    prefs.edit()
-                        .putString("uid", newSession.uid)
-                        .putString("token", newSession.token)
-                        .apply()
-                    runOnUiThread {
-                        session = newSession
-                        buildUi()
-                    }
-                } catch (e: Exception) {
-                    runOnUiThread {
-                        info.text = "Bağlantı hatası: ${e.message}"
-                    }
+            connectSupabase()
+        }
+    }
+
+    private fun showLoading() {
+        info = TextView(this).apply {
+            text = "♥\n\nKalp hazırlanıyor..."
+            textSize = 22f
+            setTextColor(pink)
+            gravity = Gravity.CENTER
+            setBackgroundColor(dark)
+            setPadding(24, 24, 24, 24)
+        }
+
+        setContentView(info)
+    }
+
+    private fun connectSupabase() {
+        info.text = "♥\n\nSupabase bağlantısı kuruluyor..."
+
+        thread {
+            try {
+                val newSession = SupabaseStore.anonymousSignIn()
+
+                prefs.edit()
+                    .putString("uid", newSession.uid)
+                    .putString("token", newSession.token)
+                    .apply()
+
+                runOnUiThread {
+                    session = newSession
+                    buildUi()
+                }
+
+            } catch (e: Exception) {
+                runOnUiThread {
+                    info.text = "Bağlantı kurulamadı.\n\n${e.message ?: "Bilinmeyen hata"}"
+                    info.setTextColor(Color.rgb(255, 100, 120))
+                    info.textSize = 15f
                 }
             }
         }
@@ -61,7 +90,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setPadding(28, 28, 28, 28)
-            setBackgroundColor(Color.rgb(12, 14, 25))
+            setBackgroundColor(dark)
         }
 
         fun text(value: String, size: Float): TextView {
@@ -70,43 +99,58 @@ class MainActivity : Activity() {
                 textSize = size
                 setTextColor(Color.WHITE)
                 gravity = Gravity.CENTER
+                setPadding(8, 12, 8, 12)
             }
         }
 
-        val title = text("♥  Kalp", 32f)
+        val title = text("♥  Kalp", 34f)
+        title.setTextColor(pink)
         root.addView(title)
 
-        root.addView(text("Mesafeler uzak olsa da kalpler yakın.", 14f))
+        root.addView(
+            text("Mesafeler uzak olsa da kalpler yakın.", 14f)
+        )
 
         info = text("Henüz eşleşmediniz.", 16f)
         root.addView(info)
 
         codeInput = EditText(this).apply {
-            hint = "Eşleşme kodu"
+            hint = "6 haneli eşleşme kodu"
             setTextColor(Color.WHITE)
             setHintTextColor(Color.LTGRAY)
             gravity = Gravity.CENTER
+            singleLine = true
         }
         root.addView(codeInput)
 
         dateInput = EditText(this).apply {
-            hint = "İlişki başlangıcı (YYYY-MM-DD)"
+            hint = "İlişki başlangıcı (YYYY-AA-GG)"
             setTextColor(Color.WHITE)
             setHintTextColor(Color.LTGRAY)
             gravity = Gravity.CENTER
-            setText(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()))
+            singleLine = true
+            setText(
+                SimpleDateFormat(
+                    "yyyy-MM-dd",
+                    Locale.US
+                ).format(Date())
+            )
         }
         root.addView(dateInput)
 
         val createButton = Button(this).apply {
             text = "Yeni eşleşme oluştur"
-            setOnClickListener { createPair() }
+            setOnClickListener {
+                createPair()
+            }
         }
         root.addView(createButton)
 
         val joinButton = Button(this).apply {
             text = "Partnerimin koduyla katıl"
-            setOnClickListener { joinPair() }
+            setOnClickListener {
+                joinPair()
+            }
         }
         root.addView(joinButton)
 
@@ -115,18 +159,23 @@ class MainActivity : Activity() {
 
     private fun createPair() {
         val date = dateInput.text.toString().trim()
-        val code = (100000..999999).random().toString()
 
         if (!date.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) {
             info.text = "Tarihi YYYY-AA-GG şeklinde yaz."
             return
         }
 
+        val code = (100000..999999).random().toString()
+
         info.text = "Eşleşme oluşturuluyor..."
 
         thread {
             try {
-                val pairId = SupabaseStore.createPair(session, code, date)
+                val pairId = SupabaseStore.createPair(
+                    session,
+                    code,
+                    date
+                )
 
                 prefs.edit()
                     .putString("pair_id", pairId)
@@ -134,11 +183,12 @@ class MainActivity : Activity() {
                     .apply()
 
                 runOnUiThread {
-                    info.text = "Kodun: $code\nPartnerine gönder."
+                    info.text = "♥ Eşleşme oluşturuldu!\nKodun: $code\nPartnerine gönder."
                 }
+
             } catch (e: Exception) {
                 runOnUiThread {
-                    info.text = "Hata: ${e.message}"
+                    info.text = "Eşleşme hatası:\n${e.message}"
                 }
             }
         }
@@ -147,7 +197,7 @@ class MainActivity : Activity() {
     private fun joinPair() {
         val code = codeInput.text.toString().trim()
 
-        if (code.length != 6) {
+        if (!code.matches(Regex("\\d{6}"))) {
             info.text = "6 haneli kodu gir."
             return
         }
@@ -156,7 +206,10 @@ class MainActivity : Activity() {
 
         thread {
             try {
-                val pairId = SupabaseStore.joinPair(session, code)
+                val pairId = SupabaseStore.joinPair(
+                    session,
+                    code
+                )
 
                 prefs.edit()
                     .putString("pair_id", pairId)
@@ -165,9 +218,10 @@ class MainActivity : Activity() {
                 runOnUiThread {
                     info.text = "♥ Başarıyla eşleştiniz!"
                 }
+
             } catch (e: Exception) {
                 runOnUiThread {
-                    info.text = "Hata: ${e.message}"
+                    info.text = "Eşleşme hatası:\n${e.message}"
                 }
             }
         }
