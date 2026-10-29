@@ -1,10 +1,9 @@
 package com.kalp.app
 
 import android.Manifest
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.Service
+import android.app.*
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -19,7 +18,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
-import java.time.Instant
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 class LocationService : Service(), LocationListener {
 
@@ -40,8 +42,11 @@ class LocationService : Service(), LocationListener {
                 .createNotificationChannel(channel)
         }
 
-        val notification = Notification.Builder(this, channelId)
-            .setContentTitle("Kalp")
+        val notification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this, channelId)
+        } else {
+            Notification.Builder(this)
+        }.setContentTitle("Kalp")
             .setContentText("Konum paylaşımı açık")
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .build()
@@ -65,12 +70,16 @@ class LocationService : Service(), LocationListener {
             return
         }
 
-        locationManager.requestLocationUpdates(
-            LocationManager.GPS_PROVIDER,
-            60000L,
-            20f,
-            this
-        )
+        try {
+            locationManager.requestLocationUpdates(
+                LocationManager.GPS_PROVIDER,
+                60000L,
+                20f,
+                this
+            )
+        } catch (_: Exception) {
+            stopSelf()
+        }
     }
 
     override fun onLocationChanged(location: Location) {
@@ -82,12 +91,19 @@ class LocationService : Service(), LocationListener {
 
         Thread {
             try {
+                val timestamp = SimpleDateFormat(
+                    "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+                    Locale.US
+                ).apply {
+                    timeZone = TimeZone.getTimeZone("UTC")
+                }.format(Date())
+
                 val row = JSONObject()
                     .put("pair_id", pairId)
                     .put("user_id", uid)
                     .put("latitude", location.latitude)
                     .put("longitude", location.longitude)
-                    .put("updated_at", Instant.now().toString())
+                    .put("updated_at", timestamp)
 
                 val connection = URL(
                     SupabaseStore.BASE_URL +
@@ -120,12 +136,57 @@ class LocationService : Service(), LocationListener {
                     )
                 }
 
-                connection.responseCode
+                val responseCode = connection.responseCode
                 connection.disconnect()
 
+                if (responseCode in 200..299) {
+                    refreshDistanceAndWidget(prefs, uid, token, pairId)
+                }
             } catch (_: Exception) {
             }
         }.start()
+    }
+
+    private fun refreshDistanceAndWidget(
+        prefs: android.content.SharedPreferences,
+        uid: String,
+        token: String,
+        pairId: String
+    ) {
+        try {
+            val session = SupabaseStore.Session(uid, token)
+            val locations = SupabaseStore.getLocations(session, pairId)
+
+            if (locations.length() >= 2) {
+                val first = locations.getJSONObject(0)
+                val second = locations.getJSONObject(1)
+
+                val distance = FloatArray(1)
+
+                Location.distanceBetween(
+                    first.getDouble("latitude"),
+                    first.getDouble("longitude"),
+                    second.getDouble("latitude"),
+                    second.getDouble("longitude"),
+                    distance
+                )
+
+                val km = distance[0] / 1000f
+
+                prefs.edit()
+                    .putString("distance", String.format(Locale.US, "%.1f", km))
+                    .apply()
+            }
+
+            val manager = AppWidgetManager.getInstance(this)
+            val component = ComponentName(this, LoveWidget::class.java)
+            val ids = manager.getAppWidgetIds(component)
+
+            for (id in ids) {
+                LoveWidget.updateWidget(this, manager, id)
+            }
+        } catch (_: Exception) {
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -139,6 +200,8 @@ class LocationService : Service(), LocationListener {
 
     override fun onProviderEnabled(provider: String) {}
     override fun onProviderDisabled(provider: String) {}
+
+    @Deprecated("Deprecated in Android")
     override fun onStatusChanged(
         provider: String?,
         status: Int,
