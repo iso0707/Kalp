@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Kodları indir
+      - name: Kodlari indir
         uses: actions/checkout@v4
 
       - name: Java 17 kur
@@ -19,13 +19,15 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Gradle izinleri
-        run: chmod +x gradlew
+      - name: Gradle kur
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
 
-      - name: APK oluştur
-        run: ./gradlew assembleDebug
+      - name: APK olustur
+        run: gradle assembleDebug
 
-      - name: APK yükle
+      - name: APK yukle
         uses: actions/upload-artifact@v4
         with:
           name: Kalp-APK
