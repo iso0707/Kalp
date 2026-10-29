@@ -54,7 +54,6 @@ class MainActivity : Activity() {
             setBackgroundColor(dark)
             setPadding(24, 24, 24, 24)
         }
-
         setContentView(info)
     }
 
@@ -74,7 +73,6 @@ class MainActivity : Activity() {
                     session = newSession
                     buildUi()
                 }
-
             } catch (e: Exception) {
                 runOnUiThread {
                     info.text = "Bağlantı kurulamadı.\n\n${e.message ?: "Bilinmeyen hata"}"
@@ -107,9 +105,7 @@ class MainActivity : Activity() {
         title.setTextColor(pink)
         root.addView(title)
 
-        root.addView(
-            text("Mesafeler uzak olsa da kalpler yakın.", 14f)
-        )
+        root.addView(text("Mesafeler uzak olsa da kalpler yakın.", 14f))
 
         info = text("Henüz eşleşmediniz.", 16f)
         root.addView(info)
@@ -119,7 +115,6 @@ class MainActivity : Activity() {
             setTextColor(Color.WHITE)
             setHintTextColor(Color.LTGRAY)
             gravity = Gravity.CENTER
-            singleLine = true
         }
         root.addView(codeInput)
 
@@ -128,29 +123,19 @@ class MainActivity : Activity() {
             setTextColor(Color.WHITE)
             setHintTextColor(Color.LTGRAY)
             gravity = Gravity.CENTER
-            singleLine = true
-            setText(
-                SimpleDateFormat(
-                    "yyyy-MM-dd",
-                    Locale.US
-                ).format(Date())
-            )
+            setText(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()))
         }
         root.addView(dateInput)
 
         val createButton = Button(this).apply {
             text = "Yeni eşleşme oluştur"
-            setOnClickListener {
-                createPair()
-            }
+            setOnClickListener { createPair() }
         }
         root.addView(createButton)
 
         val joinButton = Button(this).apply {
             text = "Partnerimin koduyla katıl"
-            setOnClickListener {
-                joinPair()
-            }
+            setOnClickListener { joinPair() }
         }
         root.addView(joinButton)
 
@@ -166,16 +151,11 @@ class MainActivity : Activity() {
         }
 
         val code = (100000..999999).random().toString()
-
         info.text = "Eşleşme oluşturuluyor..."
 
         thread {
             try {
-                val pairId = SupabaseStore.createPair(
-                    session,
-                    code,
-                    date
-                )
+                val pairId = SupabaseStore.createPair(session, code, date)
 
                 prefs.edit()
                     .putString("pair_id", pairId)
@@ -185,7 +165,6 @@ class MainActivity : Activity() {
                 runOnUiThread {
                     info.text = "♥ Eşleşme oluşturuldu!\nKodun: $code\nPartnerine gönder."
                 }
-
             } catch (e: Exception) {
                 runOnUiThread {
                     info.text = "Eşleşme hatası:\n${e.message}"
@@ -206,10 +185,7 @@ class MainActivity : Activity() {
 
         thread {
             try {
-                val pairId = SupabaseStore.joinPair(
-                    session,
-                    code
-                )
+                val pairId = SupabaseStore.joinPair(session, code)
 
                 prefs.edit()
                     .putString("pair_id", pairId)
@@ -218,7 +194,6 @@ class MainActivity : Activity() {
                 runOnUiThread {
                     info.text = "♥ Başarıyla eşleştiniz!"
                 }
-
             } catch (e: Exception) {
                 runOnUiThread {
                     info.text = "Eşleşme hatası:\n${e.message}"
