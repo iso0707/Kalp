@@ -8,7 +8,7 @@ import java.net.URL
 object SupabaseStore {
 
     const val BASE_URL = "https://dtdecwxgflsywnvylcwe.supabase.co"
-    const val PUBLISHABLE_KEY = "MEVCUT_PUBLISHABLE_KEYINI_BURAYA_YAZ"
+    const val PUBLISHABLE_KEY = "sb_publishable_fnDics7iGtWDaO_oC1JXbA_T045VCXp"
 
     data class Session(val uid: String, val token: String)
 
