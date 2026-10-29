@@ -1,14 +1,14 @@
 package com.kalp.app
 
 import android.app.Activity
+import android.app.DatePickerDialog
 import android.os.Bundle
+import android.content.Context
 import android.graphics.Color
 import android.view.Gravity
 import android.widget.*
-import android.content.Context
 import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.util.*
 import kotlin.concurrent.thread
 
 class MainActivity : Activity() {
@@ -17,9 +17,12 @@ class MainActivity : Activity() {
     private val pink = Color.rgb(255, 130, 170)
 
     private lateinit var root: LinearLayout
+    private lateinit var info: TextView
     private lateinit var username: EditText
     private lateinit var password: EditText
-    private lateinit var info: TextView
+    private lateinit var selectedDate: TextView
+
+    private var relationshipDate = Calendar.getInstance()
 
     private val prefs by lazy {
         getSharedPreferences("kalp_data", Context.MODE_PRIVATE)
@@ -27,7 +30,6 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         window.statusBarColor = dark
         window.navigationBarColor = dark
 
@@ -35,9 +37,9 @@ class MainActivity : Activity() {
         val token = prefs.getString("token", null)
 
         if (uid != null && token != null) {
-            showPairScreen(SupabaseStore.Session(uid, token))
+            showHome(SupabaseStore.Session(uid, token))
         } else {
-            showLoginScreen()
+            showLogin()
         }
     }
 
@@ -45,68 +47,54 @@ class MainActivity : Activity() {
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(28, 28, 28, 28)
+            setPadding(25, 25, 25, 25)
             setBackgroundColor(dark)
         }
         setContentView(root)
     }
 
     private fun addText(value: String, size: Float): TextView {
-        val view = TextView(this).apply {
+        val v = TextView(this).apply {
             text = value
             textSize = size
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
             setPadding(8, 12, 8, 12)
         }
-        root.addView(view)
-        return view
+        root.addView(v)
+        return v
     }
 
-    private fun makeInput(hintText: String, isPassword: Boolean = false): EditText {
-        return EditText(this).apply {
+    private fun addInput(hintText: String, secret: Boolean = false): EditText {
+        val v = EditText(this).apply {
             hint = hintText
             setTextColor(Color.WHITE)
             setHintTextColor(Color.LTGRAY)
             gravity = Gravity.CENTER
-            if (isPassword) {
-                inputType = android.text.InputType.TYPE_CLASS_TEXT or
-                    android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-            } else {
-                inputType = android.text.InputType.TYPE_CLASS_TEXT
-            }
-            root.addView(this)
+            inputType = if (secret) 129 else 1
         }
+        root.addView(v)
+        return v
     }
 
-    private fun makeButton(label: String, action: () -> Unit) {
-        val button = Button(this).apply {
+    private fun addButton(label: String, action: () -> Unit) {
+        root.addView(Button(this).apply {
             text = label
             setOnClickListener { action() }
-        }
-        root.addView(button)
+        })
     }
 
-    private fun showLoginScreen() {
+    private fun showLogin() {
         makeRoot()
+        addText("♥ Kalp", 36f).setTextColor(pink)
+        addText("Mesafeler uzak olsa da kalpler yakın.", 14f)
 
-        val title = addText("♥ Kalp", 36f)
-        title.setTextColor(pink)
-
-        addText("Birbirinize olan mesafeniz artık önemli değil.", 14f)
-
-        username = makeInput("Kullanıcı adı")
-        password = makeInput("Şifre", true)
-
+        username = addInput("Kullanıcı adı")
+        password = addInput("Şifre", true)
         info = addText("", 14f)
 
-        makeButton("Giriş Yap") {
-            authenticate(false)
-        }
-
-        makeButton("Hesap Oluştur") {
-            authenticate(true)
-        }
+        addButton("Giriş Yap") { authenticate(false) }
+        addButton("Hesap Oluştur") { authenticate(true) }
     }
 
     private fun authenticate(register: Boolean) {
@@ -114,7 +102,7 @@ class MainActivity : Activity() {
         val pass = password.text.toString()
 
         if (!user.matches(Regex("[a-zA-Z0-9_]{3,20}"))) {
-            info.text = "Kullanıcı adı 3-20 karakter olmalı. Harf, rakam ve _ kullan."
+            info.text = "Kullanıcı adı 3-20 karakter olmalı."
             return
         }
 
@@ -127,68 +115,83 @@ class MainActivity : Activity() {
 
         thread {
             try {
-                val session = if (register) {
+                val s = if (register) {
                     SupabaseStore.register(user, pass)
                 } else {
                     SupabaseStore.login(user, pass)
                 }
 
                 prefs.edit()
-                    .putString("uid", session.uid)
-                    .putString("token", session.token)
+                    .putString("uid", s.uid)
+                    .putString("token", s.token)
                     .apply()
 
-                runOnUiThread {
-                    showPairScreen(session)
-                }
+                runOnUiThread { showHome(s) }
 
             } catch (e: Exception) {
                 runOnUiThread {
-                    info.text = e.message ?: "Bir hata oluştu."
+                    info.text = e.message ?: "Bağlantı hatası"
                 }
             }
         }
     }
 
-    private fun showPairScreen(session: SupabaseStore.Session) {
+    private fun showHome(session: SupabaseStore.Session) {
         makeRoot()
 
-        val title = addText("♥ Kalp", 34f)
-        title.setTextColor(pink)
+        addText("♥ Kalp", 36f).setTextColor(pink)
+        addText("Birlikte geçen zamanınız", 16f)
 
-        addText("Mesafeler uzak olsa da kalpler yakın.", 14f)
+        info = addText("Bilgiler yükleniyor...", 18f)
 
-        info = addText("Henüz eşleşmediniz.", 16f)
+        val pairId = prefs.getString("pair_id", null)
+        if (pairId != null) {
+            loadPairInfo(session, pairId)
+        } else {
+            info.text = "Henüz eşleşmediniz."
+        }
 
-        val codeInput = makeInput("6 haneli eşleşme kodu")
-        val dateInput = makeInput("İlişki başlangıcı (YYYY-AA-GG)")
+        val codeInput = addInput("6 haneli eşleşme kodu")
 
-        dateInput.setText(
-            SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-        )
+        selectedDate = addText("", 16f)
+        updateDateText()
 
-        makeButton("Yeni eşleşme oluştur") {
-            val date = dateInput.text.toString().trim()
+        addButton("♥ Başlangıç tarihini seç") {
+            val now = Calendar.getInstance()
 
-            if (!date.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) {
-                info.text = "Tarihi YYYY-AA-GG şeklinde yaz."
-                return@makeButton
-            }
+            DatePickerDialog(
+                this,
+                { _, year, month, day ->
+                    relationshipDate.set(year, month, day)
+                    updateDateText()
+                },
+                relationshipDate.get(Calendar.YEAR),
+                relationshipDate.get(Calendar.MONTH),
+                relationshipDate.get(Calendar.DAY_OF_MONTH)
+            ).show()
+        }
 
-            val code = (100000..999999).random().toString()
+        addButton("Yeni eşleşme oluştur") {
+            val date = SimpleDateFormat(
+                "yyyy-MM-dd",
+                Locale.US
+            ).format(relationshipDate.time)
+
             info.text = "Eşleşme oluşturuluyor..."
 
             thread {
                 try {
-                    val pairId = SupabaseStore.createPair(session, code, date)
+                    val id = SupabaseStore.createPair(session, (100000..999999).random().toString(), date)
 
                     prefs.edit()
-                        .putString("pair_id", pairId)
-                        .putString("pair_code", code)
+                        .putString("pair_id", id)
+                        .putString("pair_code", prefs.getString("pair_code", ""))
+                        .putString("relationship_start", date)
                         .apply()
 
                     runOnUiThread {
-                        info.text = "♥ Kodun: $code\nPartnerine gönder."
+                        info.text = "♥ Eşleşme oluşturuldu!\nKodunu aşağıda görebilirsin."
+                        loadPairInfo(session, id)
                     }
                 } catch (e: Exception) {
                     runOnUiThread {
@@ -198,26 +201,24 @@ class MainActivity : Activity() {
             }
         }
 
-        makeButton("Partnerimin koduyla katıl") {
+        addButton("Partnerimin koduyla katıl") {
             val code = codeInput.text.toString().trim()
 
             if (!code.matches(Regex("\\d{6}"))) {
                 info.text = "6 haneli kodu gir."
-                return@makeButton
+                return@addButton
             }
 
             info.text = "Eşleşiliyor..."
 
             thread {
                 try {
-                    val pairId = SupabaseStore.joinPair(session, code)
-
-                    prefs.edit()
-                        .putString("pair_id", pairId)
-                        .apply()
+                    val id = SupabaseStore.joinPair(session, code)
+                    prefs.edit().putString("pair_id", id).apply()
 
                     runOnUiThread {
                         info.text = "♥ Başarıyla eşleştiniz!"
+                        loadPairInfo(session, id)
                     }
                 } catch (e: Exception) {
                     runOnUiThread {
@@ -227,9 +228,57 @@ class MainActivity : Activity() {
             }
         }
 
-        makeButton("Çıkış Yap") {
-            prefs.edit().clear().apply()
-            showLoginScreen()
+        addButton("Bilgileri yenile") {
+            val id = prefs.getString("pair_id", null)
+            if (id != null) loadPairInfo(session, id)
+        }
+
+        addButton("Çıkış yap") {
+            prefs.edit().remove("uid").remove("token").apply()
+            showLogin()
+        }
+    }
+
+    private fun updateDateText() {
+        selectedDate.text = "Seçilen tarih: " +
+            SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
+                .format(relationshipDate.time)
+    }
+
+    private fun loadPairInfo(session: SupabaseStore.Session, pairId: String) {
+        info.text = "Bilgiler yükleniyor..."
+
+        thread {
+            try {
+                val pair = SupabaseStore.getPairInfo(session, pairId)
+                val start = pair.getString("relationship_start")
+
+                val date = SimpleDateFormat(
+                    "yyyy-MM-dd",
+                    Locale.US
+                ).parse(start.substring(0, 10)) ?: Date()
+
+                val elapsed = (System.currentTimeMillis() - date.time)
+                    .coerceAtLeast(0L)
+
+                val days = elapsed / 86400000L
+                val hours = elapsed / 3600000L
+
+                prefs.edit()
+                    .putString("relationship_start", start)
+                    .putString("relationship_days", days.toString())
+                    .putString("relationship_hours", hours.toString())
+                    .apply()
+
+                runOnUiThread {
+                    info.text = "♥ Eşleşme aktif\n\n$days gündür birliktesiniz\n$hours saat"
+                }
+
+            } catch (e: Exception) {
+                runOnUiThread {
+                    info.text = "Bilgi alınamadı:\n${e.message}"
+                }
+            }
         }
     }
 }
