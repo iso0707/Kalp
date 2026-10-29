@@ -1,6 +1,5 @@
 package com.kalp.app
 
-import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -8,9 +7,7 @@ import java.net.URL
 object SupabaseStore {
 
     const val BASE_URL = "https://dtdecwxgflsywnvylcwe.supabase.co"
-
-    // Kendi Supabase Publishable Key anahtarını buraya yaz.
-    const val PUBLISHABLE_KEY = "sb_publishable_fnDics7iGtWDaO_oC1JXbA_T045VCXp"
+    const val PUBLISHABLE_KEY = "BURAYA_MEVCUT_PUBLISHABLE_KEY"
 
     data class Session(val uid: String, val token: String)
 
@@ -18,8 +15,7 @@ object SupabaseStore {
         path: String,
         method: String,
         token: String? = null,
-        body: Any? = null,
-        prefer: String? = null
+        body: JSONObject? = null
     ): String {
         val conn = URL(BASE_URL + path).openConnection() as HttpURLConnection
         conn.requestMethod = method
@@ -34,10 +30,6 @@ object SupabaseStore {
             conn.setRequestProperty("Authorization", "Bearer $token")
         }
 
-        if (prefer != null) {
-            conn.setRequestProperty("Prefer", prefer)
-        }
-
         if (body != null) {
             conn.doOutput = true
             conn.outputStream.use {
@@ -49,22 +41,42 @@ object SupabaseStore {
             conn.inputStream.bufferedReader().use { it.readText() }
         } else {
             val error = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+            val code = conn.responseCode
             conn.disconnect()
-            throw Exception("Supabase ${conn.responseCode}: $error")
+            throw Exception("Supabase $code: $error")
         }
 
         conn.disconnect()
         return result
     }
 
-    fun anonymousSignIn(): Session {
-        val json = JSONObject(
-            request("/auth/v1/signup", "POST", body = JSONObject())
-        )
+    private fun accountEmail(username: String): String {
+        return username.trim().lowercase() + "@kalp.app"
+    }
 
+    private fun sessionFrom(response: String): Session {
+        val json = JSONObject(response)
         return Session(
             json.getJSONObject("user").getString("id"),
             json.getString("access_token")
+        )
+    }
+
+    fun register(username: String, password: String): Session {
+        val body = JSONObject()
+            .put("email", accountEmail(username))
+            .put("password", password)
+
+        return sessionFrom(request("/auth/v1/signup", "POST", body = body))
+    }
+
+    fun login(username: String, password: String): Session {
+        val body = JSONObject()
+            .put("email", accountEmail(username))
+            .put("password", password)
+
+        return sessionFrom(
+            request("/auth/v1/token?grant_type=password", "POST", body = body)
         )
     }
 
@@ -86,15 +98,5 @@ object SupabaseStore {
             session.token,
             JSONObject().put("p_code", code)
         ).trim().trim('"')
-    }
-
-    fun getLocations(session: Session, pairId: String): JSONArray {
-        return JSONArray(
-            request(
-                "/rest/v1/locations?pair_id=eq.$pairId&select=user_id,latitude,longitude,updated_at",
-                "GET",
-                session.token
-            )
-        )
     }
 }
